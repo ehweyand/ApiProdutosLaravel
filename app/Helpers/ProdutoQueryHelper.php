@@ -43,4 +43,68 @@ class ProdutoQueryHelper
             ORDER BY tg.mes, tg.total DESC;
         ";
     }
+
+    public static function getQueryResumoProdutosClientes()
+    {
+        return "WITH ClientesMaisAtivos AS (
+                    SELECT
+                        cp.clientes_id,
+                        COUNT(DISTINCT cp.pedidos_id) AS total_pedidos
+                    FROM
+                        produtos_pedidos cp
+                    JOIN pedidos pe ON cp.pedidos_id = pe.id
+                    WHERE
+                        pe.data_pedido > current_date - INTERVAL '1 year'
+                    GROUP BY
+                        cp.clientes_id
+                    ORDER BY
+                        total_pedidos DESC
+                    LIMIT 100
+                ),
+
+                ProdutosMaisCaros AS (
+                    SELECT
+                        p.id AS produto_id,
+                        p.valor_unitario,
+                        ROW_NUMBER() OVER (ORDER BY p.valor_unitario DESC) AS rank_valor
+                    FROM
+                        produtos p
+                    WHERE
+                        p.valor_unitario > (SELECT AVG(valor_unitario) FROM produtos)
+                ),
+
+                PedidosRecentes AS (
+                    SELECT
+                        cp.clientes_id,
+                        cp.pedidos_id,
+                        SUM(p.valor_unitario) AS total_pedido
+                    FROM
+                        produtos_pedidos cp
+                    JOIN produtos p ON cp.produtos_id = p.id
+                    WHERE
+                        cp.produtos_id IN (SELECT produto_id FROM ProdutosMaisCaros WHERE rank_valor <= 50)
+                    GROUP BY
+                        cp.clientes_id, cp.pedidos_id
+                )
+
+                SELECT
+                    cma.clientes_id,
+                    c.nome,
+                    c.endereco,
+                    pr.pedidos_id,
+                    pr.total_pedido,
+                    pcm.produto_id,
+                    p.descricao,
+                    pcm.valor_unitario AS valor_produto,
+                    pcm.rank_valor
+                FROM
+                    ClientesMaisAtivos cma
+                JOIN clientes c ON cma.clientes_id = c.id
+                JOIN PedidosRecentes pr ON cma.clientes_id = pr.clientes_id
+                JOIN produtos_pedidos cp ON pr.pedidos_id = cp.pedidos_id AND pr.clientes_id = cp.clientes_id
+                JOIN ProdutosMaisCaros pcm ON cp.produtos_id = pcm.produto_id
+                JOIN produtos p ON pcm.produto_id = p.id
+                ORDER BY
+                    cma.total_pedidos DESC, pr.total_pedido DESC, pcm.rank_valor;";
+    }
 }

@@ -15,4 +15,13 @@ class ProdutoController extends Controller
 
         return response()->json($resultados);
     }
+
+    public function resumoProdutosClientes()
+    {
+        $sql = ProdutoQueryHelper::getQueryResumoProdutosClientes();
+
+        $resultados = DB::select($sql);
+
+        return response()->json($resultados);
+    }
 }
